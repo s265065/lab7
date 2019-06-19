@@ -17,9 +17,9 @@ class JavaMail {
         String subject = "Подтверждение регистрации";
         String content = "Ваш пароль: " + reg_token + ". Никому не показывайте его! Спасибо за регистрацию, вот вам случайный Майкл Шин как котик";
         String smtpHost = "smtp.gmail.com";
-        String from = "lesti0505@gmail.com";
-        String login = "lesti0505@gmail.com";
-        String password = "yanerobot";
+        String from = "some-email";
+        String login = "email";
+        String password = "password";
         String smtpPort="25";
         try {
             sendSimpleMessage(login, password, from, email, content, subject, smtpPort, smtpHost);
@@ -33,12 +33,12 @@ class JavaMail {
         String subject = "Подтверждение регистрации";
         String content = "Ваш пароль: randompassword. Никому не показывайте его!  Спасибо за регистрацию, вот вам случайный Майкл Шин как котик";
         String smtpHost = "smtp.gmail.com";
-        String from = "lesti0505@gmail.com";
-        String login = "lesti0505@gmail.com";
-        String password = "yanerobot";
+        String from = "some-email";
+        String login = "email";
+        String password = "password";
         String smtpPort = "25";
         try {
-            sendSimpleMessage(login, password, from, "lesti0505@gmail.com", content, subject, smtpPort, smtpHost);
+            sendSimpleMessage(login, password, from, "email", content, subject, smtpPort, smtpHost);
         } catch (Exception e) {
             System.out.println(e.getMessage());
             System.out.println("Ошибка при отправке письма");
