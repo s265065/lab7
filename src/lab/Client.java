@@ -1,7 +1,5 @@
 package lab;
 
-import jdk.internal.org.objectweb.asm.tree.IntInsnNode;
-
 import java.io.*;
 import java.net.ConnectException;
 import java.net.InetSocketAddress;
@@ -10,11 +8,8 @@ import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
 import java.nio.channels.UnresolvedAddressException;
 import java.nio.file.AccessDeniedException;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.stream.Stream;
 
 public class Client {
     private static boolean multiline = false;
@@ -22,7 +17,6 @@ public class Client {
     private static String serverAddress = "localhost";
     private static int serverPort = 8080;
     private static String username;
-    private static String password;
 
     private static Command previousCommand = null;
 
@@ -73,63 +67,68 @@ public class Client {
     private static String processCommand(String query) {
         query = query.trim().replaceAll("\\s{2,}", " ");
         Command command = new Command(query);
+        if (((command.name).equals("login")) || ((command.name).equals("register")) || ((command.name).equals("repeat")) || (username != null)) {
+            if (command.name.isEmpty())
+                return "Введите команду";
 
-        if (command.name.isEmpty())
-            return "Введите команду";
-
-        if (previousCommand == null)
-            if (command.name.equals("repeat"))
-                return "repeat не должен быть первой командой. Введите help repeat, чтобы узнать больше";
+            if (previousCommand == null)
+                if (command.name.equals("repeat"))
+                    return "repeat не должен быть первой командой. Введите help repeat, чтобы узнать больше";
+                else
+                    previousCommand = command;
+            else if (command.name.equals("repeat"))
+                command = previousCommand;
             else
                 previousCommand = command;
-        else if (command.name.equals("repeat"))
-            command = previousCommand;
-        else
-            previousCommand = command;
 
-        switch (command.name) {
-            case "exit":
-                System.exit(0);
+            switch (command.name) {
+                case "exit":
+                    System.exit(0);
 
-            case "show":
-                return doShow();
+                case "show":
+                    return doShow();
 
-            case "address":
-                if (command.argument == null)
-                    return "Адрес сервера: " + serverAddress +
-                            "\nЧтобы изменить адрес, введите его после команды";
-                serverAddress = command.argument;
-                return "Установлен адрес " + serverAddress;
-            case "port":
-                if (command.argument == null)
-                    return "Порт: " + serverPort +
-                            "\nЧтобы изменить порт, введите его после команды";
-                int newPort;
-                try {
-                    newPort = Integer.parseInt(command.argument);
-                } catch (NumberFormatException e) {
-                    newPort = -1;
-                }
-                if (newPort < 1 || newPort > 65535)
-                    return "Порт должен быть числом от 1 до 65535";
-                serverPort = newPort;
-                return "Установлен порт " + serverPort;
+                case "address":
+                    if (command.argument == null)
+                        return "Адрес сервера: " + serverAddress +
+                                "\nЧтобы изменить адрес, введите его после команды";
+                    serverAddress = command.argument;
+                    return "Установлен адрес " + serverAddress;
+                case "port":
+                    if (command.argument == null)
+                        return "Порт: " + serverPort +
+                                "\nЧтобы изменить порт, введите его после команды";
+                    int newPort;
+                    try {
+                        newPort = Integer.parseInt(command.argument);
+                    } catch (NumberFormatException e) {
+                        newPort = -1;
+                    }
+                    if (newPort < 1 || newPort > 65535)
+                        return "Порт должен быть числом от 1 до 65535";
+                    serverPort = newPort;
+                    return "Установлен порт " + serverPort;
 
-            case "add":
-            case "remove":
-            case "add_min":
-                return doWithHatArgument(command.name, command.argument);
+                case "add":
+                case "remove":
+                case "add_min":
+                    return doWithHatArgument(command.name, command.argument);
 
-            case "multiline":
-                multiline = !multiline;
-                return "Многострочные команды " + (multiline ? "включены. Используйте ';' для завешения команды." : "выключены");
+                case "multiline":
+                    multiline = !multiline;
+                    return "Многострочные команды " + (multiline ? "включены. Используйте ';' для завешения команды." : "выключены");
 
-            case "import":
-                if (command.argument != null)
-                    return doImport(command.argument);
+                case "import":
+                    if (command.argument != null)
+                        return doImport(command.argument);
 
-            default:
-                return sendCommand(command.name, command.argument);
+                case "login":
+                    return doLogin(command.name, command.argument);
+                default:
+                    return sendCommand(command.name, command.argument);
+            }
+        } else {
+            return "вы не авторизированны";
         }
     }
 
@@ -148,6 +147,9 @@ public class Client {
                 Hat[] hats;
                 try {
                     hats = HatMaker.generate(jsonArgument);
+                    for (int i = 0; i < hats.length; i++) {
+                        hats[i].setUser(Client.username);
+                    }
                 } catch (Exception e) {
                     return e.getMessage();
                 }
@@ -159,7 +161,7 @@ public class Client {
                     for (int i = 0; i < hats.length; i++) {
                         // Making a Message instance and writing it to ByteArrayOutputStream
                         Message message = new Message<>(command, hats[i], i + 1 == hats.length);
-                        message.setUserName(username);
+                        message.setUserName(Client.username);
                         oos.writeObject(message);
                     }
 
@@ -277,6 +279,56 @@ public class Client {
             return "Ошибка ввода-вывода: " + e.getMessage();
         } catch (Exception e) {
             return "Неизвестная ошибка: " + e.toString();
+        }
+    }
+
+    private static String doLogin(String name, String argument) {
+        try (SocketChannel channel = SocketChannel.open()) {
+            channel.connect(new InetSocketAddress(serverAddress, serverPort));
+
+            // Making a Message instance and writing it to ByteArrayOutputStream
+            Message message = new Message<>(name, argument, true);
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            ObjectOutputStream oos = new ObjectOutputStream(baos);
+            oos.writeObject(message);
+
+            // Sending message using channel
+            ByteBuffer sendingBuffer = ByteBuffer.allocate(baos.size());
+            sendingBuffer.put(baos.toByteArray());
+            sendingBuffer.flip();
+            new Thread(() -> {
+                try {
+                    channel.write(sendingBuffer);
+                } catch (IOException ignored) {
+                }
+            }).start();
+
+            // Getting Message instance from response
+            ObjectInputStream ois = new ObjectInputStream(channel.socket().getInputStream());
+            while (true) {
+                Message incoming = (Message) ois.readObject();
+                System.out.println(incoming.getMessage());
+                String mess[] = incoming.getMessage().split(" ");
+                try {
+                    Client.username = mess[3];
+                } catch (ArrayIndexOutOfBoundsException e) {
+                }
+                if (incoming.hasEndFlag())
+                    break;
+            }
+            return "";
+        } catch (UnresolvedAddressException e) {
+            return "Не удалось определить адрес сервера. Воспользуйтесь командой address, чтобы изменить адрес.";
+        } catch (UnknownHostException e) {
+            return "Ошибка подключения к серверу: неизвестный хост. Воспользуйтесь командой address, чтобы изменить адрес";
+        } catch (SecurityException e) {
+            return "Нет разрешения на подключение, проверьте свои настройки безопасности";
+        } catch (ConnectException e) {
+            return "Нет соединения с сервером. Введите repeat, чтобы попытаться ещё раз, или измените адрес (команда address)";
+        } catch (IOException e) {
+            return "Ошибка ввода-вывода, обработка запроса прервана";
+        } catch (ClassNotFoundException e) {
+            return "Ошибка: клиент отправил данные в недоступном для клиента формате (" + e.getLocalizedMessage() + ")";
         }
     }
 

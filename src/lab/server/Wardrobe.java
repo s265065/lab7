@@ -39,28 +39,16 @@ public class Wardrobe extends ArrayList<Hat> implements Comparator<Hat> {
      * @param a Шляпа, которую нужно добавить
      * @return true, если шляпа успешно добавлена
      */
-    synchronized public boolean add(Hat a) {
+    synchronized boolean addH(Hat a, String username) {
         if (this.size() >= maxCollectionElements)
             throw new WardrobeOverflowException();
         if (!(a.color.equals(""))) {
-            super.add(new Hat(a.size, a.color, a.num, a.content));
+            a.setUser(username);
+            super.add(a);
             return true;
         } else {
             return false;
         }
-    }
-
-    /**
-     * Выводит весь гардероб.
-     * Цвет и размер каждой из шляп и их содержимое
-     */
-    String show() {
-        StringBuilder result = new StringBuilder();
-        for (Hat hat : this) result.append(hat.showHat());
-        if (this.size() == 0) {
-            result.append("гардероб пуст");
-        }
-        return result.toString();
     }
 
     /**
@@ -77,15 +65,18 @@ public class Wardrobe extends ArrayList<Hat> implements Comparator<Hat> {
      *
      * @param a Шляпа, которую нужно удалить
      */
-    synchronized boolean remove(Hat a) {
-        boolean result = false;
-        for (int index = 0; index < this.size(); index++) {
-            if (((a.size) == (this.get(index).size)) && /* vs & */ ((a.num) == (this.get(index).num)) & ((a.color).equals(this.get(index).color))) {
-                super.remove(index);
-                result = true;
+    synchronized boolean remove(Hat a, String username) {
+        if (username.equals(a.getUser())) {
+            boolean result = false;
+            for (int index = 0; index < this.size(); index++) {
+                if (((a.size) == (this.get(index).size)) && /* vs & */ ((a.num) == (this.get(index).num)) & ((a.color).equals(this.get(index).color))) {
+                    super.remove(index);
+                    result = true;
+                }
             }
+            return result;
         }
-        return result;
+        return false;
     }
 
     /**
@@ -93,13 +84,13 @@ public class Wardrobe extends ArrayList<Hat> implements Comparator<Hat> {
      *
      * @param a Шляпа, которую нужно добавить
      */
-    synchronized boolean addIfMin(Hat a) {
+    synchronized boolean addIfMin(Hat a, String username) {
         boolean result = false;
         Stream<Hat> stream = stream();
         Optional<Hat> min = stream.min(Comparator.comparingInt(Hat::getSize));
         Hat minHat = min.get();
         if (compare(a, minHat) < 0) {
-            add(a);
+            addH(a, username);
             result = true;
         }
         return result;

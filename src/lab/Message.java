@@ -79,7 +79,7 @@ public class Message<T extends Serializable> implements Serializable {
         return endFlag;
     }
 
-    public void setUserName(String userName) {
+    void setUserName(String userName) {
         this.userName = userName;
     }
 

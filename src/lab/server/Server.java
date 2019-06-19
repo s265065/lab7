@@ -1,6 +1,9 @@
 package lab.server;
 
-import java.io.*;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.PrintStream;
+import java.io.UnsupportedEncodingException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.sql.DatabaseMetaData;
@@ -10,7 +13,6 @@ public class Server {
     private static String outLogFile = "out.log";
     private static String errLogFile = "err.log";
     private static int port = 8080;
-
     private static ServerSocket serverSocket;
     private static Logger logger;
     private static DataBaseConnection db;
@@ -30,23 +32,24 @@ public class Server {
 
         try {
             serverSocket = new ServerSocket(port);
-            DataBaseConnection db = new DataBaseConnection();
+            db = new DataBaseConnection();
             logger.log("Сервер запущен и слушает порт " + port + "...");
         } catch (IOException e) {
             logger.err("Ошибка создания серверного сокета (" + e.getLocalizedMessage() + "), приложение будет остановлено.");
             System.exit(1);
         }
 
-       initTables();
-
+        initTables();
         Wardrobe wardrobe = new Wardrobe();
+        db.loadHats(wardrobe);
+
 
         while (true) {
             try {
                 Socket clientSocket = serverSocket.accept();
                 new Thread(new RequestResolver(clientSocket, wardrobe, logger, db)).start();
             } catch (IOException e) {
-                logger.err("Connection error: " + e.getMessage());
+                logger.err("Ошибка подключения: " + e.getMessage());
             }
         }
     }
@@ -56,13 +59,14 @@ public class Server {
 
         autoCreateTable(
                 "hats",
-                "id serial primary key not null, size integer, color text, num integer, contents text, createdDate timestamp"
+                "id serial primary key not null, size integer, color text, num integer, contents text, createdDate text, username text"
         );
 
         autoCreateTable(
                 "users",
-                "id serial primary key not null, name text, email text unique, password_hash bytes"
+                "id serial primary key not null, username text, email text unique, password_hash text"
         );
+
 
     }
     private static void autoCreateTable(String name, String structure) {

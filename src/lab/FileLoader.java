@@ -11,7 +11,7 @@ public class FileLoader {
      * @return содержимое в виде строки
      * @throws IOException если что-то пойдет не так
      */
-    public static String getFileContent(String filename, boolean showProgressCat) throws IOException {
+    static String getFileContent(String filename, boolean showProgressCat) throws IOException {
         try (BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(new FileInputStream(filename)))) {
             long fileSize = new File(filename).length();
             StringBuilder fileContent = new StringBuilder();
@@ -30,7 +30,7 @@ public class FileLoader {
      * @return содержимое в виде строки
      * @throws IOException если что-то пойдет не так
      */
-    public static String getFileContent(String filename) throws IOException {
+    static String getFileContent(String filename) throws IOException {
         return getFileContent(filename, true);
     }
 

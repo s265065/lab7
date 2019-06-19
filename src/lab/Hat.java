@@ -1,6 +1,6 @@
 package lab;
 
-import lab.json.*;
+import lab.json.JSONString;
 
 import java.io.Serializable;
 import java.time.ZonedDateTime;
@@ -11,7 +11,7 @@ public class Hat  implements Serializable, Comparable<Hat> {
     public int num;
     private String user;
     private ZonedDateTime createdDate = ZonedDateTime.now();
-    public Thing[] content;
+    private Thing[] content;
 
     public String getHatColor(){
         return ("шляпа с цветом " + this.color);
@@ -88,9 +88,9 @@ public class Hat  implements Serializable, Comparable<Hat> {
     /**
      * Выводит информацию о шляпе: размер, цвет, местоположение, дату создания и содержимое
      */
-    public String showHat(){
+    String showHat() {
         StringBuilder result= new StringBuilder();
-        result.append("Размер шляпы ").append(this.size).append("; Цвет шляпы ").append(this.color).append("; Расположение шляпы: полка №").append(this.num).append(";").append(" Дата создания: ").append(this.createdDate);
+        result.append("Размер шляпы ").append(this.size).append("; Цвет шляпы ").append(this.color).append("; Расположение шляпы: полка №").append(this.num).append(";").append(" Дата создания: ").append(this.createdDate).append("Владелец: ").append(this.user);
         for (int i=0; i < this.size; i++){
             if (this.content[i]!=null)
                 result.append("В шляпе лежит ").append(this.content[i].rus(this.content[i].name.toString())).append("\n ");

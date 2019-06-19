@@ -1,26 +1,29 @@
 package lab.server;
 
-import lab.*;
+import lab.Hat;
+import lab.Message;
+import lab.Utils;
 
 import java.io.*;
 import java.net.Socket;
 import java.nio.file.AccessDeniedException;
-import java.util.*;
+import java.sql.SQLException;
+import java.time.ZonedDateTime;
+import java.util.Arrays;
+import java.util.LinkedList;
+import java.util.List;
 
 class RequestResolver implements Runnable {
 
     private static int maxRequestSize = 268435456;
     private static long maxLoggableRequestSize = 128;
     private static DataBaseConnection db;
-    private String username = null;
-    private String password = null;
-    private String mail = null;
     private ObjectOutputStream out;
     private ObjectInputStream ois;
     private Wardrobe wardrobe;
     private Socket socket;
     private Logger logger;
-    private String autosave="autosave.csv";
+    private String autosave = "autosave.csv";
 
     RequestResolver(Socket socket, Wardrobe wardrobe, Logger logger, DataBaseConnection db) {
         try {
@@ -31,6 +34,8 @@ class RequestResolver implements Runnable {
             this.socket = socket;
             this.wardrobe = wardrobe;
             this.logger = logger;
+            this.db = new DataBaseConnection();
+
 
 
         } catch (IOException e) {
@@ -86,6 +91,7 @@ class RequestResolver implements Runnable {
 
     /**
      * Отправляет сообщение, отмеченное как последнее
+     *
      * @param message текст сообщения
      */
     private void sendEndMessage(String message) {
@@ -94,6 +100,7 @@ class RequestResolver implements Runnable {
 
     /**
      * Отправляет сообщение с указанным флагом окончания
+     *
      * @param message текст сообщения
      * @param endFlag флаг окончания
      */
@@ -107,6 +114,7 @@ class RequestResolver implements Runnable {
 
     /**
      * Обрабатывает сообщение, отправляемый клиенту результат будет отмечен как последний
+     *
      * @param message сообщение
      */
     private void processMessage(Message message) {
@@ -115,6 +123,7 @@ class RequestResolver implements Runnable {
 
     /**
      * Обрабатывает сообщение
+     *
      * @param message сообщение
      * @param endFlag если он true, результат обработки отправится клиенту как последний
      */
@@ -129,13 +138,13 @@ class RequestResolver implements Runnable {
                 sendMessage(wardrobe.info(), endFlag);
                 return;
 
-            case "show": //TODO: show no changes????????
+            case "show":
                 try {
                     Hat[] hats = new Hat[0];
                     hats = wardrobe.toArray(hats);
                     Arrays.sort(hats);
                     for (int i = 0, hatsLength = hats.length; i < hatsLength; i++)
-                        out.writeObject(new Message<>("", hats[i], i+1 == hatsLength));
+                        out.writeObject(new Message<>("", hats[i], i + 1 == hatsLength));
                     if (wardrobe.size() == 0)
                         out.writeObject(new Message<>("", null));
                 } catch (IOException e) {
@@ -145,54 +154,58 @@ class RequestResolver implements Runnable {
 
             case "save":
                 if (wardrobe != null) {
-                    db.saveHats(wardrobe);
-                    sendEndMessage( "Saved Hats to the DataBase");
-                } sendEndMessage("Collection is empty; nothing to save!");
+                    db.saveHats(wardrobe, (String) message.getArgument());
+                    sendEndMessage("Гардероб сохранён в файл");
+                }
+                sendEndMessage("Гардероб пуст, сохранять нечего");
                 return;
 
             case "load":
-//                if (!message.hasArgument()) {
-//                    sendMessage("Имя не указано.\n" +
-//                            "Введите \"help load\", чтобы узнать, как пользоваться командой", endFlag);
-//                    return;
-//                }
-//                try {
-//                    if (!(message.getArgument() instanceof String)) {
-//                        sendMessage("Клиент отправил запрос в неверном формате (аргумент сообщения должен быть строкой)", endFlag);
-//                        return;
-//                    }
-//                    wardrobe.clear();
-//                    WardrobeLoaderSaver.load(wardrobe, (String)message.getArgument());
-//                    sendMessage("Загрузка успешна", endFlag);
-//                } catch (AccessDeniedException e) {
-//                    sendMessage("Нет доступа для чтения", endFlag);
-//                } catch (FileNotFoundException e) {
-//                    sendMessage("Файл не найден", endFlag);
-//                } catch (IOException e) {
-//                    sendEndMessage("На сервере произошла ошибка чтения/записи");
-//                } catch (WardrobeOverflowException e) {
-//                    sendMessage("В шляпе не осталось места, некоторые существа загрузились", endFlag);
-//                }
-                db.loadHats(wardrobe);
+                if (!message.hasArgument()) {
+                    sendMessage("Имя не указано.\n" +
+                            "Введите \"help load\", чтобы узнать, как пользоваться командой", endFlag);
+                    return;
+                }
+                try {
+                    if (!(message.getArgument() instanceof String)) {
+                        sendMessage("Клиент отправил запрос в неверном формате (аргумент сообщения должен быть строкой)", endFlag);
+                        return;
+                    }
+                    wardrobe.clear();
+                    db.clear();
+                    WardrobeLoaderSaver.load(wardrobe, (String) message.getArgument(), this.db, message.getUserName());
+                    sendMessage("Загрузка успешна", endFlag);
+                } catch (AccessDeniedException e) {
+                    sendMessage("Нет доступа для чтения", endFlag);
+                } catch (FileNotFoundException e) {
+                    sendMessage("Файл не найден", endFlag);
+                } catch (IOException e) {
+                    sendEndMessage("На сервере произошла ошибка чтения/записи");
+                } catch (WardrobeOverflowException e) {
+                    sendMessage("В шляпе не осталось места, некоторые существа загрузились", endFlag);
+                } catch (SQLException e) {
+                    sendEndMessage("Ошибка при очистке базы данных");
+                }
                 return;
 
-//            case "import": //TODO: import???
-//                if (!message.hasArgument()) {
-//                    sendMessage("Имя не указано.\n" +
-//                            "Введите \"help import\", чтобы узнать, как пользоваться командой", endFlag);
-//                    return;
-//                }
-//                try {
-//                    if (!(message.getArgument() instanceof String)) {
-//                        sendMessage("Клиент отправил запрос в неверном формате (аргумент сообщения должен быть строкой)", endFlag);
-//                        return;
-//                    }
-//                    WardrobeLoaderSaver.imload(wardrobe, (String)message.getArgument());
-//                    sendMessage("Загрузка успешна! В гардеробе " + wardrobe.size() + " шляп", endFlag);
-//                    db.saveHats(wardrobe);
-//                } catch (WardrobeOverflowException e) {
-//                    sendMessage("В гардеробе не остмалось места, некоторые шляпы не загрузились", endFlag);}
-//                return;
+            case "import":
+                if (!message.hasArgument()) {
+                    sendMessage("Имя не указано.\n" +
+                            "Введите \"help import\", чтобы узнать, как пользоваться командой", endFlag);
+                    return;
+                }
+                try {
+                    if (!(message.getArgument() instanceof String)) {
+                        sendMessage("Клиент отправил запрос в неверном формате (аргумент сообщения должен быть строкой)", endFlag);
+                        return;
+                    }
+                    WardrobeLoaderSaver.imload(wardrobe, (String) message.getArgument(), this.db, message.getUserName());
+                    sendMessage("Загрузка успешна! В гардеробе " + wardrobe.size() + " шляп", endFlag);
+                    db.saveHats(wardrobe, autosave);
+                } catch (WardrobeOverflowException e) {
+                    sendMessage("В гардеробе не остмалось места, некоторые шляпы не загрузились", endFlag);
+                }
+                return;
 
             case "add":
                 try {
@@ -204,12 +217,12 @@ class RequestResolver implements Runnable {
                         sendMessage("Клиент отправил данные в неверном формате (аргумент должен быть сериализованным объектом)", endFlag);
                         return;
                     }
-                    Hat hat = (Hat)message.getArgument();
-                    if (wardrobe.add(hat)){
-                    sendMessage(hat.getHatColor() + " добавлена в гардероб", endFlag);
-                        db.addToDB(hat, username);
+                    Hat hat = (Hat) message.getArgument();
+                    if (wardrobe.addH(hat, message.getUserName())) {
+                        sendMessage(hat.getHatColor() + " добавлена в гардероб", endFlag);
+                        db.addToDB(hat, message.getUserName());
                     }
-                    db.saveHats(wardrobe);
+                    db.saveHats(wardrobe, autosave);
                     return;
                 } catch (WardrobeOverflowException e) {
                     sendMessage("Недостаточно места в гардеробе. " +
@@ -230,11 +243,11 @@ class RequestResolver implements Runnable {
                         sendMessage("Клиент отправил данные в неверном формате (аргумент должен быть сериализованным объектом)", endFlag);
                         return;
                     }
-                    if (wardrobe.addIfMin((Hat)message.getArgument())){
+                    if (wardrobe.addIfMin((Hat) message.getArgument(), message.getUserName())) {
                         sendMessage("Шляпа добавлена", endFlag);
-                        db.addToDB((Hat)message.getArgument(),username);
-                        db.saveHats(wardrobe);}
-                    else  sendMessage("Шляпа не добавлена", endFlag);
+                        db.addToDB((Hat) message.getArgument(), message.getUserName());
+                        db.saveHats(wardrobe, autosave);
+                    } else sendMessage("Шляпа не добавлена", endFlag);
                     return;
                 } catch (Exception e) {
                     sendMessage(e.getMessage(), endFlag);
@@ -250,13 +263,13 @@ class RequestResolver implements Runnable {
                         sendMessage("Клиент отправил данные в неверном формате (аргумент должен быть сериализованным объектом)", endFlag);
                         return;
                     }
-                    boolean removed = wardrobe.remove((Hat)message.getArgument());
-                    if (removed){
+                    boolean removed = wardrobe.remove((Hat) message.getArgument(), message.getUserName());
+                    if (removed) {
                         sendMessage("Шляпа удалена", endFlag);
-                        db.removeHat((Hat)message.getArgument(), username);
-                        db.saveHats(wardrobe);}
-                    else
-                        sendMessage("Такой шляпы не нашлось", endFlag);
+                        db.removeHat((Hat) message.getArgument(), message.getUserName());
+                        db.saveHats(wardrobe, autosave);
+                    } else
+                        sendMessage("У Вас доступе не нашлось такой шляпы. Удалять можно только свои шляпы.", endFlag);
                 } catch (Exception e) {
                     sendMessage(e.getMessage(), endFlag);
                 }
@@ -274,25 +287,59 @@ class RequestResolver implements Runnable {
                 return;
 
             case "register":
-                int resultR = db.executeRegister(username, mail, password);
-                if (resultR == 1) {
-                    sendEndMessage("Email registration is approved!");
-                } else if (resultR == 0) {
-                    sendEndMessage("You've already registered!");
+                if (message.hasArgument()) {
+                    try {
+                        String args[] = message.getArgument().toString().split(" ");
+                        String usernameS = args[0];
+                        String mailS = args[1];
+                        if (args.length > 2) {
+                            String passwordS = args[2];
+                            int resultR = db.executeRegister(usernameS, mailS, passwordS);
+                            if (resultR == 1) {
+                                sendEndMessage("Регистрация успешна");
+                            } else if (resultR == 0) {
+                                sendEndMessage("Вы уже зарегестрированны");
+                            } else {
+                                sendEndMessage("Ошибка при регистрации");
+                            }
+                        } else {
+                            int resultR = db.executeRegister(usernameS, mailS, (new Integer(Math.round((ZonedDateTime.now()).getNano()))).toString());
+                            if (resultR == 1) {
+                                sendEndMessage("Регистрация успешна");
+                            } else if (resultR == 0) {
+                                sendEndMessage("Вы уже зарегестрированны");
+                            } else {
+                                sendEndMessage("Ошибка при регистрации");
+                            }
+                        }
+                    } catch (NullPointerException e) {
+                        sendEndMessage("Невернный ввод. Вы должны ввести имя пользователя почту и (при желании) пароль разделенный одним пробелом");
+                    } catch (ArrayIndexOutOfBoundsException e) {
+                        sendEndMessage("Невернный ввод. Вы должны ввести имя пользователя почту и (при желании) пароль разделенный одним пробелом");
+                    }
                 } else {
-                    sendEndMessage("Can't register you");
+                    sendEndMessage("Укажите имя пользователя и почту при желании пароль");
                 }
                 break;
             case "login":
-                int result = db.executeLogin(username, password);
-                if (result == 0) {
-                    sendEndMessage("Logged in");
-                } else if (result == 1) {
-                    sendEndMessage("You need to register first!");
-                } else if (result == 2) {
-                    sendEndMessage( "Wrong Password!");
-                } else {
-                    sendEndMessage("Can't log in");
+                try {
+                    String args[] = message.getArgument().toString().split(" ");
+                    String usernameS = args[0];
+                    String passwordS = args[1];
+                    int result = db.executeLogin(usernameS, passwordS);
+                    if (result == 0) {
+                        sendEndMessage("Вы вошли как " + usernameS);
+                    } else if (result == 1) {
+                        sendEndMessage("Сначала нужно зарегестрироваться!");
+                    } else if (result == 2) {
+                        sendEndMessage("Неверный пароль!");
+                    } else {
+                        sendEndMessage("Не могу войти");
+                    }
+                } catch (NullPointerException e) {
+                    sendEndMessage("Невернный ввод. Вы должны ввести имя пользователя и пароль");
+                } catch (ArrayIndexOutOfBoundsException e) {
+                    sendEndMessage("Невернный ввод. Вы должны ввести имя пользователя и пароль ");
                 }
                 break;
 
@@ -306,13 +353,14 @@ class RequestResolver implements Runnable {
 
     /**
      * Возвращает инструкции к команде
+     *
      * @param command команда, для которой нужна инструкция
      * @return инструкция к указанной команде
      */
     private static String helpFor(String command) {
         switch (command) {
             case "help":
-                return  "Вот команды, которыми можно пользоваться:\n\n" +
+                return "Вот команды, которыми можно пользоваться:\n\n" +
                         "exit - выход\n" +
                         "address [newAddress] - информация об адресе сервера. Если указан адрес, он будет заменён\n" +
                         "port [newPort] - информация о порте сервера. Если указан порт, он будет заменён\n" +
@@ -334,7 +382,7 @@ class RequestResolver implements Runnable {
                 return "Введите \"exit\", чтобы выйти";
 
             case "address":
-                return  "Если вызвать эту команду, то можно узнать адрес, к которому клиент будет\n" +
+                return "Если вызвать эту команду, то можно узнать адрес, к которому клиент будет\n" +
                         "подключаться и отправлять команды. Если после команды указать новый адрес,\n" +
                         "то текущий адрес заменится им.\n\n" +
                         "Например:\n" +
@@ -343,7 +391,7 @@ class RequestResolver implements Runnable {
                         "> address localhost";
 
             case "port":
-                return  "Если вызвать эту команду, то можно узнать порт, по которому клиент будет\n" +
+                return "Если вызвать эту команду, то можно узнать порт, по которому клиент будет\n" +
                         "подключаться и отправлять команды. Если после команды указать новый порт,\n" +
                         "то текущий порт заменится им. Порт должен быть в пределах от 1 до 65535.\n\n" +
                         "Например:\n" +
@@ -363,14 +411,14 @@ class RequestResolver implements Runnable {
                 return "Выводит список шляп в гардеробе";
 
             case "save {файл}":
-                return  "Введите \"save\", а затем имя файла, чтобы сохранить в него гардероб.\n" +
+                return "Введите \"save\", а затем имя файла, чтобы сохранить в него гардероб.\n" +
                         "Файл будет содержать список шляп в формате csv\n\n" +
                         "Например:\n" +
                         "> save saved_state.csv";
 
 
             case "add":
-                return  "Здесь вы можете добавить новую шляпу в гардероб.  \n" +
+                return "Здесь вы можете добавить новую шляпу в гардероб.  \n" +
                         "Чтобы сделать это пожалуйста введите текст в формате json так, как представленно на примере \n " +
                         "\"{\"size\": <положительное целое число>, \"color\": <строка>}\" \n " +
                         "Если вы хотите создать шляпу, в которой сразу будут лежать каки-либо предметы, вам следует набрать следующий текст:  \n " +
@@ -387,31 +435,39 @@ class RequestResolver implements Runnable {
                         "Если какой-то предмет будет введен несколько раз он будет добавлен только один раз.\n ";
 
             case "add_min":
-                return  "Эта команда идентична команде add (введите \"help add\", чтобы узнать о ней), но  \n"+
+                return "Эта команда идентична команде add (введите \"help add\", чтобы узнать о ней), но  \n" +
                         "в данном случае шляпа будет добавлена только в том случае, если она ниже всех уже имеющихся";
 
             case "multiline":
-                return  "Переключает режим многострочного ввода. Если многострочный ввод выключен, введите \"multiline\",\n" +
+                return "Переключает режим многострочного ввода. Если многострочный ввод выключен, введите \"multiline\",\n" +
                         "чтобы включить его. После того, как вы включили многострочный режим, ваши команды будут\n" +
                         "отделяться друг от друга знаком ';'.\n" +
                         "Чтобы выключить многострочный ввод, введите \"multiline;\". Обратите внимание, что в режиме\n" +
                         "многострочного ввода также нужен знак ';' после команды отключения многострочного ввода.";
 
             case "import":
-                return  "Иногда бывает так, что нужно передать содержимое всего файла на сервер, где этого файла нет.\n" +
+                return "Иногда бывает так, что нужно передать содержимое всего файла на сервер, где этого файла нет.\n" +
                         "Используйте команду \"import\", чтобы сделать это. После имени команды укажите файл,\n" +
                         "содержимое которого передастся на сервер.  Файл должен хранить данные в формате csv\n\n" +
                         "Например:\n" +
                         "> import client_file.csv";
 
             case "load":
-                return  "Эта команда идентична команде import (введите \"help import\", чтобы узнать о ней), но  \n"+
+                return "Эта команда идентична команде import (введите \"help import\", чтобы узнать о ней), но  \n" +
                         "load используется для загрузки файла сервера\n";
 
             case "save":
-                return  "Эта команда сохраняет состояние коллекции в файл сервера в формате csv.\n\n" +
+                return "Эта команда сохраняет состояние коллекции в файл сервера в формате csv.\n\n" +
                         "Например:\n" +
                         "> save server_file.csv";
+
+            case "login":
+                return "Эта команда испоользуется для входа в аккаунт." +
+                        "Вместе с командой нужно ввести логи и пароль через один пробел";
+
+            case "register":
+                return "Команда чтобы зарегистрироваться. Необходимо ввести логин и почту. При желании можно ввести пароль. \n" +
+                        "Если пароль не будет введён, то он сгенерируется автоматически";
 
             case "remove":
                 return "Здесь вы можете удалить шляпу из гардероба. \n " +
@@ -420,9 +476,9 @@ class RequestResolver implements Runnable {
                         "\"{\"size\": <положительное целое число>, \"color\": <строка>}\" \n " +
                         "Если в коллекции несколько шляп с такими характеристиками, будет удалена только первая найденная.\n ";
 
-                default:
-                    return  "Неизвестная команда " + command + "\n" +
-                            "Введите \"help\", чтобы узнать, какие есть команды";
+            default:
+                return "Неизвестная команда " + command + "\n" +
+                        "Введите \"help\", чтобы узнать, какие есть команды";
         }
     }
 
@@ -435,6 +491,7 @@ class RequestResolver implements Runnable {
 
     /**
      * Задаёт максимальный размер запроса
+     *
      * @param maxRequestSize максимальный размер запроса в байтах
      */
     static void setMaxRequestSize(int maxRequestSize) {
@@ -444,6 +501,7 @@ class RequestResolver implements Runnable {
     /**
      * Получает максимальный размер запроса, содержимое которого отобразится в локах.
      * Если размер запроса превысит данное значение, вместо сожержимого в локах будет указан размер запроса.
+     *
      * @return Максимальный размер логгируемого содержимого запроса
      */
     static long getMaxLoggableRequestSize() {
@@ -453,6 +511,7 @@ class RequestResolver implements Runnable {
     /**
      * Устанавливает максимальный размер запроса, содержимое которого отобразится в локах.
      * Если размер запроса превысит данное значение, вместо сожержимого в локах будет указан размер запроса.
+     *
      * @param maxLoggableRequestSize Максимальный размер логгируемого содержимого запроса
      */
     static void setMaxLoggableRequestSize(long maxLoggableRequestSize) {

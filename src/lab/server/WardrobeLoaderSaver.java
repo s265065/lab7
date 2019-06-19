@@ -6,9 +6,10 @@ import lab.NegativeShelfNumberException;
 import lab.Thing;
 
 import java.io.*;
+import java.util.Objects;
 import java.util.Scanner;
 
-public class WardrobeLoaderSaver {
+class WardrobeLoaderSaver {
 
     synchronized static void save(Wardrobe wardrobe, String filename) throws IOException{
         File file = new File(filename);
@@ -17,14 +18,14 @@ public class WardrobeLoaderSaver {
 
         for (Hat hat : wardrobe) {
             bufwriter.write(hat.size + "," + hat.color + "," + hat.num +", ");
-            if (hat.contentlist()!=""){
+            if (!Objects.equals(hat.contentlist(), "")) {
                 bufwriter.write(hat.contentlist());}
             bufwriter.write( "\n");
         }
         bufwriter.close();
     }
 
-    synchronized static void load(Wardrobe wardrobe, String filename) throws IOException{
+    synchronized static void load(Wardrobe wardrobe, String filename, DataBaseConnection db, String username) throws IOException {
         int s=wardrobe.size();
         int i =0;
         while (i<s){wardrobe.remove(wardrobe.get(0));
@@ -35,19 +36,25 @@ public class WardrobeLoaderSaver {
             while((line = fileReader.readLine())!=null){
                 Hat hat = parseCSVLine(line);
                 if (!(hat.color.equals(""))){
-                    wardrobe.add(hat);}}
+                    wardrobe.addH(hat, username);
+                    db.addToDB(hat, username);
+                }
+            }
         } catch (IOException e) {
             System.out.println("При загрузке гардероба произошла ошибка"+e.getLocalizedMessage());
         }
     }
 
-    synchronized static void imload (Wardrobe wardrobe, String filecontent) {
+    synchronized static void imload(Wardrobe wardrobe, String filecontent, DataBaseConnection db, String username) {
         String[] content;
         content = filecontent.split("\n");
-            for (int j=0; j<content.length; j++){
-                Hat hat = parseCSVLine(content[j]);
-                if (!(hat.color.equals(""))){
-                    wardrobe.add(hat);}}
+        for (String s : content) {
+            Hat hat = parseCSVLine(s);
+            if (!(hat.color.equals(""))) {
+                wardrobe.addH(hat, username);
+                db.addToDB(hat, username);
+            }
+        }
 
     }
 
@@ -71,7 +78,7 @@ public class WardrobeLoaderSaver {
                     Hat hat = new Hat(size, color, x);
                     if (scanner.hasNextLine()) {
                         String content = scanner.nextLine();
-                        if ((content != null) & (content != ",")) {
+                        if ((content != null) & (!Objects.equals(content, ","))) {
                             Scanner stscanner = new Scanner(content);
                             while (hat.checkspace() != -1) {
                                 if (stscanner.hasNext()) {
